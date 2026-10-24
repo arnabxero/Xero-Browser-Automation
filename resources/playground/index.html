@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnote — Create your account</title>
+<style>
+  :root { --bg:#F5F3EE; --panel:#FFFFFF; --ink:#1F2421; --muted:#66706A; --line:#DCD8CF; --brand:#2F6B4F; --brand-ink:#FFFFFF; --danger:#B3261E; --focus:#2F6B4F55; }
+  * { box-sizing: border-box; }
+  body { margin:0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; padding: 16px 32px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .logo { font-weight: 700; letter-spacing: -0.02em; font-size: 18px; display:flex; gap:10px; align-items:center; }
+  .logo i { width: 22px; height: 22px; border-radius: 6px; background: var(--brand); display:inline-block; }
+  nav { display:flex; gap: 4px; position: relative; }
+  nav a, nav button { color: var(--ink); text-decoration:none; padding: 8px 12px; border-radius: 8px; background:none; border:0; font: inherit; cursor:pointer; }
+  nav a:hover, nav button:hover { background: #EEEBE4; }
+  .menu { position:absolute; top: 40px; right: 0; background: var(--panel); border:1px solid var(--line); border-radius: 10px; padding: 6px; min-width: 180px; display:none; box-shadow: 0 10px 30px rgba(0,0,0,.08); z-index: 5; }
+  .has-menu:hover .menu, .has-menu:focus-within .menu { display:block; }
+  .menu a { display:block; }
+  main { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; display:grid; grid-template-columns: 1fr 300px; gap: 32px; }
+  h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .lede { color: var(--muted); margin: 0 0 28px; }
+  form, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 26px; }
+  legend { font-weight: 650; margin-bottom: 14px; font-size: 16px; }
+  .row { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .row3 { display:grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
+  label { display:block; font-size: 13.5px; font-weight: 600; margin-bottom: 5px; }
+  .field { margin-bottom: 14px; }
+  input[type=text], input[type=email], input[type=tel], input[type=password], input[type=date], input[type=url], input[type=number], select, textarea {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: #FCFBF9; font: inherit; color: inherit; }
+  input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus); border-color: var(--brand); }
+  textarea { min-height: 90px; resize: vertical; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .choices { display:flex; flex-wrap: wrap; gap: 10px 18px; }
+  .choices label { font-weight: 500; display:flex; align-items:center; gap: 7px; margin: 0; }
+  .switch { display:flex; align-items:center; gap: 10px; font-weight: 500; }
+  .switch input { position:absolute; opacity:0; width:1px; height:1px; }
+  .switch .track { width: 38px; height: 22px; border-radius: 99px; background: #CFCAC0; position: relative; transition: background .15s; }
+  .switch .track::after { content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition: transform .15s; }
+  .switch input:checked + .track { background: var(--brand); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  button.primary { background: var(--brand); color: var(--brand-ink); border: 0; padding: 12px 20px; border-radius: 10px; font: inherit; font-weight: 650; cursor: pointer; }
+  button.secondary { background: #EEEBE4; color: var(--ink); border: 0; padding: 10px 14px; border-radius: 9px; font: inherit; cursor:pointer; }
+  .error { color: var(--danger); font-size: 13px; margin-top: 4px; display:none; }
+  .invalid .error { display:block; }
+  .invalid input, .invalid select { border-color: var(--danger); }
+  aside .card { margin-bottom: 16px; }
+  aside h2 { font-size: 15px; margin: 0 0 10px; }
+  .dropzone { border: 2px dashed var(--line); border-radius: 10px; padding: 14px; min-height: 64px; margin-top: 8px; }
+  .chip { display:inline-block; padding: 6px 10px; margin: 4px; border-radius: 99px; background: #E8F0EB; cursor: grab; }
+  #success { display:none; }
+  #success.show { display:block; }
+  .summary dt { color: var(--muted); font-size: 12.5px; }
+  .summary dd { margin: 0 0 8px; font-weight: 600; }
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; }
+  .modal-back.show { display:flex; }
+  .modal { background: var(--panel); border-radius: 14px; padding: 24px; width: 360px; }
+  iframe { width: 100%; height: 120px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><i></i>Fieldnote</div>
+  <nav>
+    <a href="#pricing">Pricing</a>
+    <div class="has-menu">
+      <button type="button" aria-haspopup="true">Resources</button>
+      <div class="menu" role="menu">
+        <a href="#guides" role="menuitem">Guides</a>
+        <a href="#changelog" role="menuitem" id="changelog-link">Changelog</a>
+        <a href="#status" role="menuitem">Status</a>
+      </div>
+    </div>
+    <a href="#signin">Sign in</a>
+  </nav>
+</header>
+
+<main>
+  <section>
+    <div id="signup">
+      <h1>Create your account</h1>
+      <p class="lede">A practice form for Xero Browser Automation. Record yourself filling it in, then replay it with generated data.</p>
+      <form id="signup-form" novalidate>
+        <fieldset>
+          <legend>About you</legend>
+          <div class="row">
+            <div class="field"><label for="first-name">First name</label><input id="first-name" name="firstName" type="text" autocomplete="given-name" required></div>
+            <div class="field"><label for="last-name">Last name</label><input id="last-name" name="lastName" type="text" autocomplete="family-name" required></div>
+          </div>
+          <div class="field"><label for="email">Work email</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required><div class="error">Enter a valid email address.</div></div>
+          <div class="row">
+            <div class="field"><label for="phone">Mobile phone</label><input id="phone" name="phone" type="tel" autocomplete="tel"></div>
+            <div class="field"><label for="dob">Date of birth</label><input id="dob" name="dob" type="date"></div>
+          </div>
+          <div class="field">
+            <label>Gender</label>
+            <div class="choices" role="radiogroup">
+              <label><input type="radio" name="gender" value="female"> Female</label>
+              <label><input type="radio" name="gender" value="male"> Male</label>
+              <label><input type="radio" name="gender" value="other"> Prefer to self-describe</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Account</legend>
+          <div class="field"><label for="username">Username</label><input id="username" name="username" type="text" autocomplete="username"></div>
+          <div class="row">
+            <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">At least 8 characters.</div></div>
+            <div class="field"><label for="password2">Confirm password</label><input id="password2" name="confirmPassword" type="password" autocomplete="new-password"><div class="error">Passwords do not match.</div></div>
+          </div>
+          <div class="field"><label for="plan">Plan</label>
+            <select id="plan" name="plan">
+              <option value="">Select a plan…</option>
+              <option value="starter">Starter — free</option>
+              <option value="team">Team — $12/user</option>
+              <option value="business">Business — $29/user</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Company</legend>
+          <div class="row">
+            <div class="field"><label for="company">Company</label><input id="company" name="company" type="text" autocomplete="organization"></div>
+            <div class="field"><label for="job">Job title</label><input id="job" name="jobTitle" type="text" autocomplete="organization-title"></div>
+          </div>
+          <div class="field"><label for="website">Website</label><input id="website" name="website" type="url" placeholder="https://"></div>
+          <div class="field"><label for="street">Street address</label><input id="street" name="address1" type="text" autocomplete="address-line1"></div>
+          <div class="row3">
+            <div class="field"><label for="city">City</label><input id="city" name="city" type="text"></div>
+            <div class="field"><label for="state">State</label><input id="state" name="state" type="text"></div>
+            <div class="field"><label for="zip">ZIP code</label><input id="zip" name="zip" type="text" inputmode="numeric" maxlength="10"></div>
+          </div>
+          <div class="field"><label for="country">Country</label>
+            <select id="country" name="country">
+              <option value="">Choose…</option>
+              <option value="US">United States</option><option value="CA">Canada</option><option value="GB">United Kingdom</option>
+              <option value="DE">Germany</option><option value="FR">France</option><option value="IN">India</option><option value="AU">Australia</option>
+            </select>
+          </div>
+          <div class="field"><label for="team-size">Team size</label><input id="team-size" name="teamSize" type="number" min="1" max="500"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Preferences</legend>
+          <div class="field">
+            <label>What will you use Fieldnote for?</label>
+            <div class="choices">
+              <label><input type="checkbox" name="use" value="research"> Research</label>
+              <label><input type="checkbox" name="use" value="notes"> Meeting notes</label>
+              <label><input type="checkbox" name="use" value="docs"> Documentation</label>
+            </div>
+          </div>
+          <div class="field"><label for="about">Tell us about your team</label><textarea id="about" name="about" placeholder="A few sentences is plenty"></textarea></div>
+          <label class="switch"><input type="checkbox" id="newsletter" name="newsletter"><span class="track"></span>Send me product updates</label>
+          <div class="field" style="margin-top:14px"><label for="avatar">Profile photo</label><input id="avatar" name="avatar" type="file" accept="image/*"></div>
+        </fieldset>
+
+        <div class="field"><label class="switch" style="font-weight:500"><input type="checkbox" id="terms" name="terms"><span class="track"></span>I agree to the terms of service</label><div class="error" id="terms-error">You need to accept the terms.</div></div>
+        <button class="primary" type="submit" data-testid="create-account">Create account</button>
+      </form>
+    </div>
+
+    <div id="success" class="card" role="status">
+      <h1 id="welcome">Welcome!</h1>
+      <p class="lede">Your account is ready. Here is what we saved:</p>
+      <dl class="summary" id="summary"></dl>
+      <button class="secondary" type="button" id="start-over">Create another account</button>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>Dialogs</h2>
+      <p class="hint">Delete asks for confirmation; rename asks for a name.</p>
+      <button class="secondary" type="button" id="delete-btn">Delete workspace</button>
+      <button class="secondary" type="button" id="rename-btn">Rename</button>
+      <p id="dialog-result" class="hint"></p>
+    </div>
+    <div class="card">
+      <h2>Slow content</h2>
+      <button class="secondary" type="button" id="load-btn">Load report</button>
+      <div id="report" class="hint"></div>
+    </div>
+    <div class="card">
+      <h2>Drag to prioritise</h2>
+      <div id="chips"><span class="chip" draggable="true" id="chip-a">Alpha</span><span class="chip" draggable="true" id="chip-b">Bravo</span></div>
+      <div class="dropzone" id="dropzone" aria-label="Priority list">Drop here</div>
+    </div>
+    <div class="card">
+      <h2>Embedded widget</h2>
+      <iframe title="Feedback widget" name="feedback" srcdoc="<style>body{font:14px system-ui;margin:12px}input{padding:6px;border:1px solid #ccc;border-radius:6px}</style><label for='nps'>How likely are you to recommend us (0-10)?</label><br><input id='nps' type='number' min='0' max='10'> <button id='send' onclick=&quot;document.getElementById('thanks').textContent='Thanks!'&quot;>Send</button><p id='thanks'></p>"></iframe>
+    </div>
+    <div class="card">
+      <h2>Modal</h2>
+      <button class="secondary" type="button" id="open-modal">Invite a teammate</button>
+    </div>
+  </aside>
+</main>
+
+<div class="modal-back" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <h2 id="modal-title" style="margin-top:0">Invite a teammate</h2>
+    <div class="field"><label for="invite-email">Email</label><input id="invite-email" type="email"></div>
+    <button class="primary" type="button" id="send-invite">Send invite</button>
+    <button class="secondary" type="button" id="close-modal">Cancel</button>
+  </div>
+</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const form = $('#signup-form');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    let ok = true;
+    const email = $('#email');
+    const emailField = email.closest('.field');
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value);
+    emailField.classList.toggle('invalid', !emailOk); ok = ok && emailOk;
+    const p2 = $('#password2');
+    const match = !p2.value || p2.value === $('#password').value;
+    p2.closest('.field').classList.toggle('invalid', !match); ok = ok && match;
+    const terms = $('#terms');
+    $('#terms').closest('.field').classList.toggle('invalid', !terms.checked); ok = ok && terms.checked;
+    if (!ok) return;
+    const data = new FormData(form);
+    const show = ['firstName', 'lastName', 'email', 'phone', 'username', 'plan', 'company', 'city', 'country'];
+    $('#summary').innerHTML = show.map((k) => `<dt>${k}</dt><dd data-field="${k}">${String(data.get(k) ?? '').replace(/[<>&]/g, '')}</dd>`).join('');
+    $('#welcome').textContent = `Welcome, ${data.get('firstName') || 'friend'}!`;
+    setTimeout(() => { $('#signup').style.display = 'none'; $('#success').classList.add('show'); }, 400);
+  });
+  $('#start-over').addEventListener('click', () => { form.reset(); $('#success').classList.remove('show'); $('#signup').style.display = ''; });
+  $('#delete-btn').addEventListener('click', () => { $('#dialog-result').textContent = confirm('Delete this workspace? This cannot be undone.') ? 'Workspace deleted' : 'Kept the workspace'; });
+  $('#rename-btn').addEventListener('click', () => { const n = prompt('New workspace name', 'My workspace'); $('#dialog-result').textContent = n ? `Renamed to ${n}` : 'Rename cancelled'; });
+  $('#load-btn').addEventListener('click', () => { $('#report').textContent = 'Loading…'; setTimeout(() => { $('#report').innerHTML = '<strong id="report-ready">Report ready: 42 new signups</strong>'; }, 1500); });
+  const dz = $('#dropzone');
+  document.querySelectorAll('.chip').forEach((c) => c.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', c.id)));
+  dz.addEventListener('dragover', (e) => e.preventDefault());
+  dz.addEventListener('drop', (e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); const el = document.getElementById(id); if (el) { if (dz.textContent === 'Drop here') dz.textContent = ''; dz.appendChild(el); } });
+  $('#open-modal').addEventListener('click', () => $('#modal').classList.add('show'));
+  $('#close-modal').addEventListener('click', () => $('#modal').classList.remove('show'));
+  $('#send-invite').addEventListener('click', () => { $('#modal').classList.remove('show'); $('#dialog-result').textContent = 'Invite sent to ' + $('#invite-email').value; });
+</script>
+</body>
+</html>

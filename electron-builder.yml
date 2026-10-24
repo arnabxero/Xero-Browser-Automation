@@ -1,0 +1,40 @@
+appId: com.xero.browserautomation
+productName: Xero Browser Automation
+copyright: Copyright © 2026 Xero
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
+  - package.json
+  - '!**/*.map'
+asar: true
+asarUnpack:
+  - node_modules/playwright-core/**
+extraResources:
+  - from: resources
+    to: .
+    filter:
+      - '**/*'
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  executableName: Xero
+  artifactName: Xero-Browser-Automation-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Xero Browser Automation
+  uninstallDisplayName: Xero Browser Automation
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+electronLanguages:
+  - en-US

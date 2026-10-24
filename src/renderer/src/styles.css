@@ -1,0 +1,243 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/instrument-sans';
+@import '@fontsource-variable/jetbrains-mono';
+
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #14171d;
+  --panel: #1a1e26;
+  --raised: #222732;
+  --raised-2: #2a303c;
+  --sunken: #101319;
+  --line: #2a303c;
+  --line-strong: #3a4150;
+  --ink: #e8eaf0;
+  --ink-2: #a9afbe;
+  --ink-3: #7a8194;
+  --accent: #6a8bff;
+  --accent-strong: #5a7cf6;
+  --accent-ink: #ffffff;
+  --accent-soft: rgb(106 139 255 / 0.14);
+  --accent-line: rgb(106 139 255 / 0.45);
+  --rec: #ff4f5e;
+  --rec-soft: rgb(255 79 94 / 0.14);
+  --pass: #3ccb8a;
+  --pass-soft: rgb(60 203 138 / 0.13);
+  --fail: #ff6b78;
+  --fail-soft: rgb(255 107 120 / 0.13);
+  --warn: #f2b544;
+  --warn-soft: rgb(242 181 68 / 0.13);
+  --shadow-pop: 0 16px 48px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
+  --scrim: rgb(5 7 10 / 0.62);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --canvas: #f2f3f6;
+  --panel: #ffffff;
+  --raised: #f6f7f9;
+  --raised-2: #eceef2;
+  --sunken: #e9ebf0;
+  --line: #dee1e8;
+  --line-strong: #c9cdd7;
+  --ink: #171b24;
+  --ink-2: #4b5263;
+  --ink-3: #737b8c;
+  --accent: #3d5ce8;
+  --accent-strong: #2f4fd9;
+  --accent-ink: #ffffff;
+  --accent-soft: rgb(61 92 232 / 0.1);
+  --accent-line: rgb(61 92 232 / 0.4);
+  --rec: #e5384a;
+  --rec-soft: rgb(229 56 74 / 0.1);
+  --pass: #1e9e68;
+  --pass-soft: rgb(30 158 104 / 0.11);
+  --fail: #d63a4a;
+  --fail-soft: rgb(214 58 74 / 0.1);
+  --warn: #b7791f;
+  --warn-soft: rgb(183 121 31 / 0.12);
+  --shadow-pop: 0 16px 44px rgb(20 26 40 / 0.16), 0 2px 6px rgb(20 26 40 / 0.08);
+  --scrim: rgb(20 24 34 / 0.38);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-raised-2: var(--raised-2);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-rec: var(--rec);
+  --color-rec-soft: var(--rec-soft);
+  --color-pass: var(--pass);
+  --color-pass-soft: var(--pass-soft);
+  --color-fail: var(--fail);
+  --color-fail-soft: var(--fail-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --font-sans: 'Instrument Sans Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'Cascadia Mono', Consolas, monospace;
+  --shadow-pop: var(--shadow-pop);
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable],
+.selectable {
+  user-select: text;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: inherit;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hatched fill marks failures so they never rely on red alone. */
+.hatch-fail {
+  background-color: var(--fail);
+  background-image: repeating-linear-gradient(135deg, rgb(0 0 0 / 0.28) 0 2px, transparent 2px 5px);
+}
+.hatch-warn {
+  background-color: var(--warn);
+  background-image: repeating-linear-gradient(45deg, rgb(0 0 0 / 0.22) 0 2px, transparent 2px 5px);
+}
+
+@keyframes rec-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 79 94 / 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgb(255 79 94 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 79 94 / 0);
+  }
+}
+.rec-pulse {
+  animation: rec-pulse 1.6s infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes playhead {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pop-in {
+  animation: pop-in 140ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fade-in 160ms ease-out;
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.step-enter {
+  animation: slide-in 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-pulse,
+  .spin,
+  .pop-in,
+  .fade-in,
+  .step-enter {
+    animation: none;
+  }
+}
+
+/* Radix popper content should follow the theme surface. */
+[data-radix-popper-content-wrapper] {
+  z-index: 60 !important;
+}
