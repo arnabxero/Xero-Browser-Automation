@@ -316,9 +316,27 @@ const ROLE_TAGS: Record<string, string> = {
   columnheader: 'th,[role=columnheader]',
 };
 
+/** Matches Playwright's default for role locators, which skip elements hidden from assistive tech. */
+function hiddenForAria(el: Element): boolean {
+  if (el.closest('[aria-hidden="true"]')) return true;
+  const check = (el as HTMLElement).checkVisibility;
+  if (typeof check === 'function') return !check.call(el, { visibilityProperty: true } as CheckVisibilityOptions);
+  const style = getComputedStyle(el);
+  return style.display === 'none' || style.visibility === 'hidden';
+}
+
+function treeOrder(a: Element, b: Element): number {
+  const pos = a.compareDocumentPosition(b);
+  if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+  if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+  return 0;
+}
+
 function countRole(doc: Document, role: string, name: string): Element[] {
   const sel = ROLE_TAGS[role] ?? `[role="${role}"]`;
-  return allDeep(doc, sel).filter((e) => getRole(e) === role && accessibleName(e, role) === name);
+  return allDeep(doc, sel)
+    .filter((e) => getRole(e) === role && !hiddenForAria(e) && accessibleName(e, role) === name)
+    .sort(treeOrder);
 }
 
 function ownText(el: Element): string {
@@ -508,7 +526,8 @@ export function buildTarget(el: Element): Target {
     if (n === 1) push({ kind: 'testid', attr, value: v, score: 100, matches: 1 });
     else if (n > 1 && n < 20) {
       const idx = Array.from(root.querySelectorAll(`[${attr}="${CSS.escape(v)}"]`)).indexOf(el);
-      if (idx >= 0) push({ kind: 'testid', attr, value: v, nth: idx, score: 62, matches: n });
+      // Indexed selectors break when rows are added, so they rank below a unique CSS path.
+      if (idx >= 0) push({ kind: 'testid', attr, value: v, nth: idx, score: 52, matches: n });
     }
     break;
   }
@@ -518,7 +537,7 @@ export function buildTarget(el: Element): Target {
     if (matches.length === 1) push({ kind: 'role', value: role, name, score: 92, matches: 1 });
     else if (matches.length > 1 && matches.length < 30) {
       const idx = matches.indexOf(el);
-      if (idx >= 0) push({ kind: 'role', value: role, name, nth: idx, score: 58, matches: matches.length });
+      if (idx >= 0) push({ kind: 'role', value: role, name, nth: idx, score: 50, matches: matches.length });
     }
   }
 

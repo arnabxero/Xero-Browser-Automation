@@ -3,10 +3,10 @@ import type { Browser, BrowserContext, BrowserContextOptions } from 'playwright-
 import type { RunEvent } from '../shared/api';
 import { createGeneratorScope } from '../shared/data/catalog';
 import { mergeRunOptions, uid } from '../shared/defaults';
-import { renderTemplate } from '../shared/template';
 import type { Dataset, Flow, IterationResult, LogEntry, Run, RunOptions, RunSummary, RunTrigger, StepResult, Target } from '../shared/types';
 import { launchBrowser, parseProxy } from './browsers';
 import { cleanError, Executor } from './engine/executor';
+import { renderVariables } from './engine/values';
 import type { Repo } from './repo';
 import { summarizeRun } from './repo';
 
@@ -126,7 +126,7 @@ class ActiveRun {
     this.run.status = 'running';
     this.emitRun(true);
     const big = this.run.iterations.length > 2000;
-    const keepAlive = setInterval(() => repo.runs.save(this.run), big ? 30_000 : 5000);
+    const keepAlive = setInterval(() => this.save(), big ? 30_000 : 5000);
     try {
       if (!this.flow.steps.some((s) => s.enabled)) throw new Error('This flow has no enabled steps.');
       if (this.o.datasetId) {
@@ -180,21 +180,38 @@ class ActiveRun {
         `Finished: ${t.passed} passed, ${t.failed} failed${t.stopped ? `, ${t.stopped} stopped` : ''} in ${Math.round((this.run.duration ?? 0) / 1000)} s.`,
       );
       this.flush();
-      repo.runs.save(this.run);
-      this.persistHealed();
+      this.save();
+      try {
+        this.persistHealed();
+      } catch (e) {
+        this.log('warn', `Could not update the flow’s selectors: ${cleanError(e)}`);
+      }
       const latest = repo.getFlow(this.flow.id);
       if (latest) {
-        repo.saveFlow(
-          {
-            ...latest,
-            lastRun: { runId: this.run.id, status: this.run.status, at: this.run.startedAt, passed: t.passed, failed: t.failed, total: t.total },
-            runCount: (latest.runCount ?? 0) + 1,
-          },
-          false,
-        );
+        try {
+          repo.saveFlow(
+            {
+              ...latest,
+              lastRun: { runId: this.run.id, status: this.run.status, at: this.run.startedAt, passed: t.passed, failed: t.failed, total: t.total },
+              runCount: (latest.runCount ?? 0) + 1,
+            },
+            false,
+          );
+        } catch (e) {
+          console.error('Saving the flow’s last run failed:', e);
+        }
       }
       this.emitRun(true);
       this.deps.onFinished?.(summarizeRun(this.run));
+    }
+  }
+
+  /** Never let a failed write (a file locked by antivirus, a full disk) break the run. */
+  private save() {
+    try {
+      this.deps.repo.runs.save(this.run);
+    } catch (e) {
+      console.error('Saving run failed:', e);
     }
   }
 
@@ -270,7 +287,10 @@ class ActiveRun {
     try {
       if (!this.browser) throw new Error('Browser is not running');
       ctx = reuse ? this.reuse.get(worker) : undefined;
-      if (!ctx) {
+      if (ctx) {
+        // Keep the cookies, drop the previous iteration's tabs so tab numbers start at 1 again.
+        await Promise.all(ctx.pages().map((p) => p.close().catch(() => undefined)));
+      } else {
         ctx = await this.browser.newContext(this.contextOptions(proxy));
         if (reuse) this.reuse.set(worker, ctx);
         if (this.o.blockResources.length) {
@@ -289,9 +309,7 @@ class ActiveRun {
       }
       const scope = createGeneratorScope(this.o.dataLocale, { emailDomain: settings.emailDomain, iteration: index + 1 });
       const vars: Record<string, string> = {};
-      for (const v of this.flow.variables) {
-        vars[v.name] = renderTemplate(v.value, { vars, row, persona: scope.persona, iteration: index + 1 });
-      }
+      renderVariables(Object.fromEntries(this.flow.variables.map((v) => [v.name, v.value])), { scope, vars, row });
       const artifacts = repo.runs.artifactsDir(this.run.id);
       if (this.o.screenshots !== 'none') mkdirSync(artifacts, { recursive: true });
 
@@ -343,6 +361,7 @@ class ActiveRun {
       it.status = this.stopped ? 'stopped' : 'failed';
       it.error = this.stopped ? 'Stopped' : cleanError(e);
     } finally {
+      this.executors.get(index)?.dispose();
       this.executors.delete(index);
       if (ctx) {
         this.contexts.delete(ctx);
@@ -392,6 +411,7 @@ class ActiveRun {
 
 export class RunManager {
   private active = new Map<string, ActiveRun>();
+  private done = new Map<string, Promise<void>>();
 
   constructor(private deps: RunnerDeps) {}
 
@@ -429,11 +449,17 @@ export class RunManager {
     repo.runs.save(run);
     const ar = new ActiveRun(run, structuredClone(flow), this.deps);
     this.active.set(run.id, ar);
-    void ar.execute().finally(() => {
+    const done = ar.execute().finally(() => {
       this.active.delete(run.id);
-      const removed = repo.runs.prune(Math.max(10, repo.settings().keepRuns), (id) => this.active.has(id));
-      for (const id of removed) this.deps.emit({ type: 'removed', runId: id });
+      this.done.delete(run.id);
+      try {
+        const removed = repo.runs.prune(Math.max(10, repo.settings().keepRuns), (id) => this.active.has(id));
+        for (const id of removed) this.deps.emit({ type: 'removed', runId: id });
+      } catch (e) {
+        console.error('Pruning old runs failed:', e);
+      }
     });
+    this.done.set(run.id, done);
     return run.id;
   }
 
@@ -465,8 +491,10 @@ export class RunManager {
     return this.active.get(id)?.run;
   }
 
+  /** Stops every run and waits until each has saved its final state. */
   async stopAll() {
     await Promise.all([...this.active.values()].map((a) => a.stop()));
+    await Promise.all([...this.done.values()]);
   }
 
   activeCount(): number {

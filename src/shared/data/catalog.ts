@@ -143,12 +143,8 @@ function fromList(ctx: GenContext, o: Opts): string {
     .map((s) => s.trim())
     .filter(Boolean);
   if (!items.length) return '';
-  if (str(o.order, 'random') === 'sequential') {
-    const key = ctx.counterKey ?? 'list';
-    const n = ctx.counters?.get(key) ?? 0;
-    ctx.counters?.set(key, n + 1);
-    return items[n % items.length];
-  }
+  // One item per iteration, starting over after the last one.
+  if (str(o.order, 'random') === 'sequential') return items[(ctx.iteration - 1) % items.length];
   return ctx.faker.helpers.arrayElement(items);
 }
 

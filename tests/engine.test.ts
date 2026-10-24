@@ -159,6 +159,36 @@ async function main() {
   check(p1.length === 2 && p1[0] === p1[1], `password and confirmation match within an iteration (${p1.length})`);
   for (const l of run.logs.filter((l) => l.level === 'warn' || l.level === 'error').slice(0, 10)) console.log(`  log ${l.level}: ${l.msg}`);
 
+  console.log('Indexed buttons and Enter to submit…');
+  const rowsUrl = pathToFileURL(resolve('tests/fixtures/rows.html')).toString();
+  steps.length = 0;
+  await live.start({ flowId: 'f2', url: rowsUrl, record: true, addNavigateStep: true });
+  const rp = live.pages[0];
+  await rp.waitForLoadState('domcontentloaded');
+  await sleep(300);
+  await rp.locator('li', { hasText: 'Bravo' }).getByRole('button').click();
+  await rp.click('#q');
+  await rp.keyboard.type('lamp');
+  await rp.keyboard.press('Enter');
+  await sleep(500);
+  await live.stopRecording();
+  steps.forEach((s, i) => console.log(`  ${String(i + 1).padStart(2)}. ${stepTitle(s)}  ${stepDetail(s)}   [${s.target?.selectors.map((c) => `${c.kind}${c.nth !== undefined ? `#${c.nth}` : ''}`).join(',') ?? ''}]`));
+  const del = steps.find((s) => s.type === 'click' && s.target?.description.includes('Delete'));
+  const roleCand = del?.target?.selectors.find((c) => c.kind === 'role');
+  check(roleCand?.nth === 1, `role index ignores the hidden button (nth ${roleCand?.nth})`);
+  check(!steps.some((s) => s.type === 'click' && s.target?.description.includes('Go')), 'Enter in a field does not also record a click on the submit button');
+  check(steps.some((s) => s.type === 'press' && s.key === 'Enter'), 'Enter press recorded');
+  await live.close();
+  steps.push(newStep('assert', { assert: { kind: 'title', op: 'equals', expected: 'searched lamp' } }));
+  const rowsFlow = repo.createFlow({ name: 'Rows', steps: steps.slice() });
+  const rowsDone = new Promise<RunSummary>((res) => {
+    const runner = new RunManager({ repo, recorderSource: RECORDER_SOURCE, emit: () => undefined, onFinished: res });
+    runner.start(rowsFlow.id, { iterations: 1, headless: true, speed: 0, browser, stepTimeout: 6000 });
+  });
+  const rowsRun = repo.runs.get((await rowsDone).id)!;
+  const firstResult = rowsRun.iterations[0];
+  check(rowsRun.status === 'passed', `rows flow replays and submits once (${rowsRun.status}${firstResult.error ? `: ${firstResult.error}` : ''})`);
+
   console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
   process.exit(failures ? 1 : 0);
 }

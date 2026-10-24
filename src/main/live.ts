@@ -8,6 +8,7 @@ import type { PageMessage, PageState, RecorderMode } from '../injected/protocol'
 import { launchBrowser } from './browsers';
 import { cleanError, Executor } from './engine/executor';
 import { candidateLocator, describeHandle, framePathOf, resolveFrame, resolveTarget } from './engine/locate';
+import { renderVariables } from './engine/values';
 import { RECORDER_SOURCE } from './recorderSource';
 
 export interface LiveHooks {
@@ -47,7 +48,8 @@ export class LiveSession {
   private recorderMode: RecorderMode = 'idle';
   private lastActionAt = 0;
   private ourNavUntil = 0;
-  private userNav = new WeakMap<Page, boolean>();
+  /** Pending verdict on whether the current main-frame navigation was started by the user. */
+  private userNav = new WeakMap<Page, Promise<boolean>>();
   private lastUrl = new WeakMap<Page, string>();
   private pickResolve?: (t: Target | null) => void;
   private modeBeforePick: LiveState['mode'] = 'idle';
@@ -271,7 +273,17 @@ export class LiveSession {
       return;
     }
     if (Date.now() < this.ourNavUntil) return;
-    this.userNav.set(p, Date.now() - this.lastActionAt > 1500);
+    if (Date.now() - this.lastActionAt <= 1500) {
+      this.userNav.delete(p);
+      return;
+    }
+    // Typed addresses, bookmarks and reloads carry Sec-Fetch-Site: none; script redirects
+    // (for example after a slow sign-in) do not, and must not become "Open URL" steps.
+    const verdict = req
+      .allHeaders()
+      .then((h) => (h['sec-fetch-site'] === undefined ? true : h['sec-fetch-site'] === 'none'))
+      .catch(() => true);
+    this.userNav.set(p, verdict);
   }
 
   private onFrameNavigated(p: Page, f: Frame) {
@@ -280,11 +292,14 @@ export class LiveSession {
     const url = f.url();
     this.lastUrl.set(p, url);
     this.refreshInfo(p);
-    if (!this.isRecording() || !this.userNav.get(p)) return;
-    this.userNav.set(p, false);
+    const pending = this.userNav.get(p);
+    if (!this.isRecording() || !pending) return;
+    this.userNav.delete(p);
     if (!url || url === 'about:blank' || /^(chrome|edge)-error:/.test(url)) return;
     const tab = this.pages.indexOf(p);
-    this.enqueue(() => {
+    this.enqueue(async () => {
+      const byUser = await Promise.race([pending, sleep(2000).then(() => true)]);
+      if (!byUser) return;
       const last = this.buffer[this.buffer.length - 1];
       if (last?.type === 'navigate' && (last.tab ?? 0) === tab && Date.now() - (last.createdAt ?? 0) < 3000) {
         last.url = url;
@@ -300,21 +315,31 @@ export class LiveSession {
       return;
     }
     const tab = this.pages.indexOf(p);
-    void this.enqueue(async () => {
+    const record = this.isRecording() && d.type() !== 'beforeunload';
+    // An open dialog blocks the page, so recording the action that opened it may be waiting on
+    // the page too. Answer it right away, outside the queue; only the recorded step is queued,
+    // which keeps it after that action.
+    void (async () => {
       const policy = this.hooks.settings().recorder.dialogs;
       let accept = policy !== 'dismiss';
       let promptText = d.defaultValue();
-      if (policy === 'ask' && d.type() !== 'beforeunload') {
-        const r = await this.hooks.askDialog({ type: d.type(), message: d.message(), defaultValue: d.defaultValue() });
-        accept = r.accept;
-        if (r.promptText !== undefined) promptText = r.promptText;
+      try {
+        if (policy === 'ask' && d.type() !== 'beforeunload') {
+          const r = await this.hooks.askDialog({ type: d.type(), message: d.message(), defaultValue: d.defaultValue() });
+          accept = r.accept;
+          if (r.promptText !== undefined) promptText = r.promptText;
+        }
+      } catch {
+        /* fall back to the policy default */
       }
-      if ((this.isRecording() || this.st.mode === 'paused') && d.type() !== 'beforeunload' && this.st.mode !== 'paused') {
-        this.addStep(
-          newStep('dialog', {
-            tab,
-            dialog: { action: accept ? 'accept' : 'dismiss', promptText: d.type() === 'prompt' ? promptText : undefined, message: d.message().slice(0, 240), dialogType: d.type() },
-          }),
+      if (record) {
+        void this.enqueue(() =>
+          this.addStep(
+            newStep('dialog', {
+              tab,
+              dialog: { action: accept ? 'accept' : 'dismiss', promptText: d.type() === 'prompt' ? promptText : undefined, message: d.message().slice(0, 240), dialogType: d.type() },
+            }),
+          ),
         );
       }
       try {
@@ -323,7 +348,7 @@ export class LiveSession {
       } catch {
         /* already handled */
       }
-    });
+    })();
   }
 
   private onFileChooser(p: Page, fc: FileChooser) {
@@ -711,8 +736,8 @@ export class LiveSession {
       autoHeal: true,
       typingMode: settings.runDefaults.typingMode,
     });
-    const vars = { ...opts.variables };
     const scope = createGeneratorScope(run.dataLocale, { emailDomain: settings.emailDomain, iteration: 1 });
+    const vars = renderVariables(opts.variables, { scope, vars: {} });
     const ctl = { paused: false, stepOnce: false, stop: false };
     this.playCtl = ctl;
     const total = Math.max(0, opts.to - opts.from + 1);

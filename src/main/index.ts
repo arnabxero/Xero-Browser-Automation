@@ -7,7 +7,7 @@ import type { Settings } from '../shared/types';
 import { registerIpc } from './ipc';
 import { LiveSession } from './live';
 import { RECORDER_SOURCE } from './recorderSource';
-import { Repo, type RepoEvent } from './repo';
+import { Repo, SAFE_ID, type RepoEvent } from './repo';
 import { RunManager } from './runner';
 import { Scheduler } from './scheduler';
 
@@ -57,7 +57,7 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle('xero-asset', (req) => {
       const url = new URL(req.url);
       const parts = decodeURIComponent(url.pathname).split('/').filter(Boolean);
-      if (url.hostname !== 'run' || parts.length !== 2) return new Response('Not found', { status: 404 });
+      if (url.hostname !== 'run' || parts.length !== 2 || !SAFE_ID.test(parts[0]) || !/^[\w.-]+$/.test(parts[1])) return new Response('Not found', { status: 404 });
       const base = normalize(repo.runs.artifactsDir(parts[0]));
       const file = normalize(join(base, parts[1]));
       if (!file.startsWith(base + sep) || !existsSync(file)) return new Response('Not found', { status: 404 });
@@ -257,11 +257,20 @@ if (!app.requestSingleInstanceLock()) {
       if (repo.settings().theme === 'system') applyTitleBar(resolvedTheme(repo.settings()));
     });
 
-    app.on('before-quit', () => {
+    let cleanedUp = false;
+    app.on('before-quit', (e) => {
       quitting = true;
+      if (cleanedUp) return;
+      // Let runs save their final state and browsers close before the process exits.
+      e.preventDefault();
       scheduler.stop();
-      void runner.stopAll();
-      void live.close();
+      const timeout = new Promise((r) => setTimeout(r, 6000));
+      void Promise.race([Promise.all([runner.stopAll(), live.close()]), timeout])
+        .catch(() => undefined)
+        .finally(() => {
+          cleanedUp = true;
+          app.quit();
+        });
     });
 
     app.on('activate', () => {

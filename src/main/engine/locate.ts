@@ -114,6 +114,13 @@ export class ElementNotFoundError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** True when the element still shows the text it had when recorded. */
+async function sameText(loc: Locator, text?: string): Promise<boolean> {
+  if (!text) return false;
+  const now = await loc.innerText({ timeout: 500 }).catch(() => '');
+  return now.replace(/\s+/g, ' ').trim().slice(0, 120) === text;
+}
+
 async function firstVisible(loc: Locator): Promise<Locator | null> {
   const n = Math.min(await loc.count().catch(() => 0), 12);
   for (let i = 0; i < n; i++) {
@@ -150,6 +157,11 @@ export async function resolveTarget(page: Page, target: Target, opts: ResolveOpt
           continue;
         }
         const n = await loc.count().catch(() => -1);
+        if (n === 1 && c.nth !== undefined && c.matches) {
+          // An index only means the same element while the list has the size it had when recorded.
+          const total = await candidateLocator(frame, { ...c, nth: undefined }).count().catch(() => -1);
+          if (total !== c.matches && !(await sameText(loc, target.fingerprint.text))) continue;
+        }
         if (n === 1) return { locator: loc, frame, candidate: c, index: i };
         if (n > 1 && !ambiguous) ambiguous = { loc, c, i, frame };
       }
@@ -186,6 +198,7 @@ export async function healTarget(frame: Frame, fp: ElementFingerprint): Promise<
         const els = Array.from(document.querySelectorAll(fp.tag)).slice(0, 3000);
         let best: Element | null = null;
         let bestScore = 0;
+        let second = 0;
         for (const el of els) {
           const r = el.getBoundingClientRect();
           if (r.width < 1 || r.height < 1) continue;
@@ -221,11 +234,13 @@ export async function healTarget(frame: Frame, fp: ElementFingerprint): Promise<
           }
           const ratio = max ? s / max : 0;
           if (ratio > bestScore) {
+            second = bestScore;
             bestScore = ratio;
             best = el;
-          }
+          } else if (ratio > second) second = ratio;
         }
-        if (best && bestScore >= 0.55) {
+        // Refuse to guess between look-alikes, e.g. one "Delete" button per table row.
+        if (best && bestScore >= 0.55 && bestScore - second >= 0.12) {
           best.setAttribute('data-xero-heal', token);
           return bestScore;
         }

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import Papa from 'papaparse';
@@ -41,12 +41,23 @@ function handle(channel: string, fn: (...args: any[]) => unknown) {
   });
 }
 
+/** Files this app wrote through a save dialog; only these (and the data folder) may be opened. */
+const exported = new Set<string>();
+
+function mayOpen(ctx: IpcContext, p: string): boolean {
+  if (typeof p !== 'string' || !p) return false;
+  const full = resolve(p);
+  const root = resolve(ctx.repo.paths.root);
+  return exported.has(full) || full === root || full.startsWith(root + sep);
+}
+
 async function saveAs(ctx: IpcContext, defaultName: string, filters: Electron.FileFilter[], content: string | Buffer): Promise<ExportResult> {
   const win = ctx.window();
   const opts = { defaultPath: join(app.getPath('documents'), defaultName), filters };
   const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
   if (res.canceled || !res.filePath) return { canceled: true };
   writeFileSync(res.filePath, content);
+  exported.add(resolve(res.filePath));
   return { path: res.filePath };
 }
 
@@ -67,8 +78,14 @@ export function registerIpc(ctx: IpcContext) {
   handle('app:openExternal', (url: string) => {
     if (/^https?:\/\//i.test(url)) return shell.openExternal(url);
   });
-  handle('app:openPath', (p: string) => shell.openPath(p));
-  handle('app:showInFolder', (p: string) => shell.showItemInFolder(p));
+  handle('app:openPath', (p: string) => {
+    if (!mayOpen(ctx, p)) throw new Error('That file can’t be opened from here.');
+    return shell.openPath(p);
+  });
+  handle('app:showInFolder', (p: string) => {
+    if (!mayOpen(ctx, p)) throw new Error('That file can’t be shown from here.');
+    shell.showItemInFolder(p);
+  });
   handle('app:revealDataFolder', () => shell.openPath(repo.paths.root));
   handle('app:detectBrowsers', () => detectBrowsers(repo.settings().customBrowserPath));
   handle('app:setTitleBarTheme', (theme: 'dark' | 'light') => ctx.applyTitleBar(theme));

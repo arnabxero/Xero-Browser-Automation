@@ -441,6 +441,7 @@ interface XeroPageApi {
 
   // ── Click ─────────────────────────────────────────────────────────────
   let suppressClickUntil = 0;
+  let lastTextEnterAt = 0;
   let html5Source: Element | null = null;
   let down: { el: Element; x: number; y: number; t: number } | null = null;
 
@@ -467,6 +468,8 @@ interface XeroPageApi {
       }
       if (!recording() || !e.isTrusted) return;
       if (Date.now() < suppressClickUntil) return;
+      // Enter in a text field submits the form with a synthetic click (detail 0); the Enter press is already recorded.
+      if (e.detail === 0 && Date.now() - lastTextEnterAt < 600) return;
       const raw = deepTarget(e);
       if (!raw) return;
       const el = retarget(raw);
@@ -683,7 +686,9 @@ interface XeroPageApi {
         return;
       }
       if (!recording() || !e.isTrusted || e.repeat) return;
-      if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Dead', 'Process', 'Unidentified'].includes(e.key)) return;
+      if (['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'Dead', 'Process', 'Unidentified'].includes(e.key)) return;
+      // AltGr reports Control+Alt on Windows; it types characters such as € or ą, which the fill step captures.
+      if (e.getModifierState?.('AltGraph')) return;
       const el = deepTarget(e);
       const active = el && el !== document.body && el !== document.documentElement ? el : null;
       const inText = !!active && (isTextEntry(active) || (active as HTMLElement).isContentEditable);
@@ -702,7 +707,9 @@ interface XeroPageApi {
         record = !(active && (e.key === 'Enter' || e.key === ' ') && active.matches('button, a[href], [role=button], [role=link], input[type=submit], input[type=button]'));
       } else if (e.key.length === 1 && e.key !== ' ') record = true;
       if (!record) return;
-      const key = [...mods.filter((m) => !(m === 'Shift' && e.key.length === 1)), e.key === ' ' ? 'Space' : e.key].join('+');
+      // Shift is implied by an upper-case letter unless another modifier is held (Control+Shift+K).
+      const key = [...mods.filter((m) => !(m === 'Shift' && e.key.length === 1 && !hasCmd)), e.key === ' ' ? 'Space' : e.key].join('+');
+      if (e.key === 'Enter' && inText) lastTextEnterAt = Date.now();
       const target = active ? describe(editableRoot(active), 3000) : undefined;
       emitAction({ kind: 'press', target, key, modifiers: [] });
       if (IS_TOP) showToast(`Press ${key}`);

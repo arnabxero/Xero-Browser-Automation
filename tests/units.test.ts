@@ -1,8 +1,10 @@
 // Fast checks for pure logic: scheduling, exports, templates and field detection.
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { toPlaywright } from '../src/main/export/playwright';
 import { runDataCsv, runReportHtml, toCsv } from '../src/main/export/report';
+import { Repo } from '../src/main/repo';
 import { computeNextRun, validateCron } from '../src/main/scheduler';
 import { createGeneratorScope, DATA_TYPES, generateValue } from '../src/shared/data/catalog';
 import { detectFieldType } from '../src/shared/data/detect';
@@ -100,6 +102,22 @@ check(html.includes('Demo &lt;run&gt;') && html.includes('Could not find button'
 const csv = runDataCsv(run);
 check(csv.split('\r\n')[0] === 'Iteration,Status,Duration (s),Error,Email,Note,var:orderId' && csv.includes('"has, comma"'), 'CSV has one column per field and quotes commas');
 check(toCsv(['a'], [{ a: 'x"y' }]) === 'a\r\n"x""y"', 'CSV escapes quotes');
+
+console.log('Storage');
+const dataDir = mkdtempSync(join(tmpdir(), 'xero-units-'));
+const repoA = new Repo(dataDir);
+repoA.runs.save({ ...run, id: 'rstale', status: 'running', iterations: [{ ...run.iterations[0], status: 'running' }] });
+const repoB = new Repo(dataDir);
+const recovered = repoB.runs.get('rstale');
+check(recovered?.status === 'stopped' && recovered.iterations[0].status === 'stopped' && repoB.runs.list()[0].status === 'stopped', 'a run left “running” by a crash is marked stopped on the next start');
+check(repoB.runs.get('..') === null && repoB.sessionFile('../settings') === undefined, 'ids that could escape the data folder are rejected');
+let threw = false;
+try {
+  repoB.runs.delete('..');
+} catch {
+  threw = true;
+}
+check(threw, 'deleting a run with an unsafe id is refused');
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll unit checks passed');
 process.exit(failures ? 1 : 0);

@@ -27,10 +27,33 @@ export function makePaths(root: string): DataPaths {
   return p;
 }
 
+const pause = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/**
+ * Writes through a temp file so a crash never leaves half a document. On Windows the rename
+ * fails with EPERM/EBUSY while antivirus or the indexer holds the target open, so retry briefly
+ * and finally fall back to writing in place.
+ */
 export function writeJsonAtomic(file: string, data: unknown): void {
+  const text = JSON.stringify(data, null, 1);
   const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(data, null, 1), 'utf8');
-  renameSync(tmp, file);
+  writeFileSync(tmp, text, 'utf8');
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      renameSync(tmp, file);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw e;
+      pause(40 * (attempt + 1));
+    }
+  }
+  writeFileSync(file, text, 'utf8');
+  try {
+    rmSync(tmp, { force: true });
+  } catch {
+    /* ignore */
+  }
 }
 
 export function readJson<T>(file: string, fallback: T): T {

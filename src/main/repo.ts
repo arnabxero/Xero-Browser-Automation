@@ -45,6 +45,14 @@ export function summarizeRun(r: Run): RunSummary {
   };
 }
 
+/** Ids come from the renderer; anything else could point outside the data folder. */
+export const SAFE_ID = /^[\w-]{1,80}$/;
+
+function assertId(id: string): string {
+  if (typeof id !== 'string' || !SAFE_ID.test(id)) throw new Error('Invalid id');
+  return id;
+}
+
 /** Run documents can be large, so they live in their own files behind a small index. */
 class RunStore {
   private index: Doc<RunSummary[]>;
@@ -52,10 +60,31 @@ class RunStore {
 
   constructor(private dir: string) {
     this.index = new Doc<RunSummary[]>(join(dir, 'index.json'), []);
+    this.recoverInterrupted();
+  }
+
+  /** Runs that were still going when the app quit or crashed are marked stopped. */
+  private recoverInterrupted() {
+    const stale = this.index.get().filter((r) => r.status === 'running' || r.status === 'queued' || r.status === 'paused');
+    for (const sum of stale) {
+      const run = SAFE_ID.test(sum.id) ? readJson<Run | null>(join(this.dir, `${sum.id}.json`), null) : null;
+      if (!run) {
+        this.index.setCached(this.index.get().filter((r) => r.id !== sum.id));
+        continue;
+      }
+      for (const it of run.iterations) if (it.status === 'running' || it.status === 'pending') it.status = 'stopped';
+      run.status = 'stopped';
+      run.error = run.error ?? 'Xero was closed while this run was in progress.';
+      const t = { total: run.iterations.length, passed: 0, failed: 0, stopped: 0, running: 0, pending: 0 };
+      for (const it of run.iterations) t[it.status === 'pending' ? 'pending' : it.status]++;
+      run.totals = t;
+      this.save(run);
+    }
+    if (stale.length) this.index.set(this.index.get());
   }
 
   artifactsDir(id: string) {
-    return join(this.dir, id);
+    return join(this.dir, assertId(id));
   }
 
   list(): RunSummary[] {
@@ -63,6 +92,7 @@ class RunStore {
   }
 
   get(id: string): Run | null {
+    if (!SAFE_ID.test(id)) return null;
     const c = this.cache.get(id);
     if (c) return c;
     const file = join(this.dir, `${id}.json`);
@@ -96,6 +126,7 @@ class RunStore {
   }
 
   delete(id: string): void {
+    assertId(id);
     this.cache.delete(id);
     rmSync(join(this.dir, `${id}.json`), { force: true });
     rmSync(this.artifactsDir(id), { recursive: true, force: true });
@@ -290,6 +321,7 @@ export class Repo extends EventEmitter {
   }
 
   sessionFile(id: string): string | undefined {
+    if (!SAFE_ID.test(id)) return undefined;
     const f = join(this.paths.sessions, `${id}.json`);
     return existsSync(f) ? f : undefined;
   }
@@ -313,11 +345,13 @@ export class Repo extends EventEmitter {
   }
 
   renameSession(id: string, name: string): void {
+    assertId(id);
     this.sessionsDoc.set(this.sessionsDoc.get().map((s) => (s.id === id ? { ...s, name } : s)));
     this.changed('sessions');
   }
 
   deleteSession(id: string): void {
+    assertId(id);
     rmSync(join(this.paths.sessions, `${id}.json`), { force: true });
     this.sessionsDoc.set(this.sessionsDoc.get().filter((s) => s.id !== id));
     this.changed('sessions');

@@ -23,6 +23,15 @@ export function render(text: string | undefined, ctx: ValueContext): string {
   return hasTemplate(text) ? renderTemplate(text, templateScope(ctx)) : text;
 }
 
+/**
+ * Renders flow variables in order, so later ones can use earlier ones and any generator.
+ * Batch runs and live playback both go through here so they agree.
+ */
+export function renderVariables(defs: Record<string, string>, ctx: ValueContext): Record<string, string> {
+  for (const [name, value] of Object.entries(defs)) ctx.vars[name] = render(value, ctx);
+  return ctx.vars;
+}
+
 /** Turns a value source into the concrete text for this iteration. */
 export function resolveValue(v: ValueSource | undefined, step: Step, ctx: ValueContext): string {
   let out = '';

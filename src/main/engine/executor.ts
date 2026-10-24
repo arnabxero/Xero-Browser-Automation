@@ -138,7 +138,7 @@ export class Executor {
     this.valueCtx = { scope: o.scope, vars: this.vars, row: o.row };
     if (o.attachListeners) {
       for (const p of context.pages()) this.addPage(p);
-      context.on('page', (p) => this.addPage(p));
+      context.on('page', this.onContextPage);
     }
   }
 
@@ -146,13 +146,28 @@ export class Executor {
     return this.o.scope;
   }
 
+  private onContextPage = (p: Page) => this.addPage(p);
+  private onDialog = (d: Dialog) => void this.handleDialog(d);
+  private onFileChooser = (fc: FileChooser) => void this.handleFileChooser(fc);
+
   addPage(p: Page): void {
-    if (!this.pages.includes(p)) this.pages.push(p);
+    if (this.pages.includes(p)) return;
+    this.pages.push(p);
     p.setDefaultTimeout(this.o.run.stepTimeout);
     p.setDefaultNavigationTimeout(this.o.run.navigationTimeout);
     if (this.o.attachListeners) {
-      p.on('dialog', (d) => void this.handleDialog(d));
-      p.on('filechooser', (fc) => void this.handleFileChooser(fc));
+      p.on('dialog', this.onDialog);
+      p.on('filechooser', this.onFileChooser);
+    }
+  }
+
+  /** Detaches every listener, so a context reused by the next iteration starts clean. */
+  dispose(): void {
+    if (!this.o.attachListeners) return;
+    this.context.off('page', this.onContextPage);
+    for (const p of this.pages) {
+      p.off('dialog', this.onDialog);
+      p.off('filechooser', this.onFileChooser);
     }
   }
 
@@ -216,13 +231,15 @@ export class Executor {
   }
 
   private async page(tab = 0, timeout = 10000): Promise<Page> {
-    const deadline = Date.now() + timeout;
+    const start = Date.now();
+    const deadline = start + timeout;
     while (true) {
       const p = this.pages[tab];
       if (p && !p.isClosed()) return p;
-      if (this.o.lenientTabs) {
+      // Live sessions may have a different tab history; give a popup time to open before falling back.
+      if (this.o.lenientTabs && (p?.isClosed() || Date.now() - start > Math.min(5000, timeout / 2))) {
         const open = this.pages.filter((x) => !x.isClosed());
-        if (open.length && (p?.isClosed() || tab >= this.pages.length)) return open[open.length - 1];
+        if (open.length) return open[open.length - 1];
       }
       if (p?.isClosed()) throw new Error(`Tab ${tab + 1} was closed`);
       if (Date.now() > deadline) throw new Error(`Tab ${tab + 1} did not open`);
@@ -274,7 +291,8 @@ export class Executor {
     try {
       mkdirSync(this.o.screenshotDir, { recursive: true });
       const ext = opts.png ? 'png' : 'jpg';
-      const file = `${this.o.screenshotPrefix ?? 'shot'}-s${String(index + 1).padStart(3, '0')}-${kind}-${Date.now().toString(36)}.${ext}`;
+      const safeKind = kind.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'shot';
+      const file = `${this.o.screenshotPrefix ?? 'shot'}-s${String(index + 1).padStart(3, '0')}-${safeKind}-${Date.now().toString(36)}.${ext}`;
       const path = join(this.o.screenshotDir, file);
       const shotOpts = opts.png ? { path, timeout: 8000 } : { path, type: 'jpeg' as const, quality: 70, timeout: 8000 };
       if (opts.locator) await opts.locator.screenshot(shotOpts);
@@ -386,6 +404,12 @@ export class Executor {
   private async execute(step: Step, index: number, lastAttempt: boolean): Promise<StepExtra> {
     const timeout = step.timeout ?? this.o.run.stepTimeout;
     const start = Date.now();
+    if (step.type === 'closeTab') {
+      // Popups often close themselves (sign-in, payment); never fall back to closing another tab.
+      const own = this.pages[step.tab ?? 0];
+      if (own && !own.isClosed()) await own.close();
+      return { message: own ? undefined : 'The tab was not open' };
+    }
     const page = await this.page(step.tab ?? 0, Math.max(timeout, 5000));
     const tab = this.pages.indexOf(page);
     if (tab !== this.activeTab) {
@@ -654,9 +678,6 @@ export class Executor {
         return {};
       }
 
-      case 'closeTab':
-        if (!page.isClosed()) await page.close();
-        return {};
 
       case 'goBack':
         await page.goBack({ waitUntil: this.o.run.waitUntil, timeout: this.o.run.navigationTimeout });
