@@ -62,8 +62,10 @@ try {
   await type('#first-name', 'Ada');
   await type('#last-name', 'Lovelace');
   await type('#email', 'ada@example.com');
-  await type('#password', 'Engine123!');
-  await type('#password2', 'Engine123!');
+  // A throwaway value for the practice form, generated so the repo holds no credential-like literal.
+  const practicePassword = `Pw${Math.random().toString(36).slice(2, 10)}!9`;
+  await type('#password', practicePassword);
+  await type('#password2', practicePassword);
   await page.selectOption('#plan', 'business');
   await type('#zip', '10001');
   await page.click('label:has(#terms)');

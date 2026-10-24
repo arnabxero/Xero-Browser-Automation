@@ -73,8 +73,10 @@ async function main() {
   await page.fill('#dob', '1990-04-12');
   await page.click('input[value=male]');
   await type('#username', 'jsmith');
-  await type('#password', 'Secret123!');
-  await type('#password2', 'Secret123!');
+  // A throwaway value for the practice form, generated so the repo holds no credential-like literal.
+  const practicePassword = `Pw${Math.random().toString(36).slice(2, 10)}!9`;
+  await type('#password', practicePassword);
+  await type('#password2', practicePassword);
   await page.selectOption('#plan', 'team');
   await type('#company', 'Acme Inc');
   await type('#job', 'Engineer');
